@@ -4,31 +4,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   getTenantAccessToken,
   listTables,
   getTableFields,
   listRecords,
-  createRecord,
   updateRecord,
   uploadMedia,
 } from "@/lib/lark-api";
 import ServiceReport from "@/components/ServiceReport";
-import { Loader2, CheckCircle, Key, Database, RefreshCw, Plus, X, Upload } from "lucide-react";
+import { Loader2, CheckCircle, Key, Database, RefreshCw, Send } from "lucide-react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 
 interface TableInfo {
   table_id: string;
   name: string;
-}
-
-interface FieldInfo {
-  field_id: string;
-  field_name: string;
-  type: number;
 }
 
 export default function Index() {
@@ -38,16 +30,10 @@ export default function Index() {
   const [appToken, setAppToken] = useState("");
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTableId, setSelectedTableId] = useState("");
-  const [tableFields, setTableFields] = useState<FieldInfo[]>([]);
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [sendingAll, setSendingAll] = useState(false);
   const [progress, setProgress] = useState("");
-  const [showAddRecord, setShowAddRecord] = useState(false);
-  const [newRecordFields, setNewRecordFields] = useState<Record<string, string>>({});
-  const [beforeImages, setBeforeImages] = useState<File[]>([]);
-  const [afterImages, setAfterImages] = useState<File[]>([]);
-  const [creatingRecord, setCreatingRecord] = useState(false);
   const sendingRef = useRef(false);
 
   // When token and appToken are set, fetch tables
@@ -58,13 +44,10 @@ export default function Index() {
       .catch((e) => toast.error("Failed to list tables: " + e.message));
   }, [token, appToken]);
 
-  // When table is selected, fetch fields and records
+  // When table is selected, fetch records
   useEffect(() => {
     if (!token || !appToken || !selectedTableId) return;
-    getTableFields(token, appToken, selectedTableId)
-      .then(setTableFields)
-      .catch(() => {});
-    fetchAndSend();
+    fetchRecords();
   }, [selectedTableId]);
 
   const handleAuth = async () => {
@@ -83,7 +66,7 @@ export default function Index() {
     }
   };
 
-  const fetchAndSend = useCallback(async () => {
+  const fetchRecords = useCallback(async () => {
     if (!token || !appToken || !selectedTableId) return;
     setLoading(true);
     try {
@@ -91,10 +74,6 @@ export default function Index() {
       const items = await listRecords(token, appToken, selectedTableId);
       setRecords(items);
       toast.success(`Fetched ${items.length} records`);
-
-      if (items.length > 0) {
-        setTimeout(() => sendAllPdfs(items, token), 1500);
-      }
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -130,22 +109,22 @@ export default function Index() {
     return pdf.output("datauristring").split(",")[1];
   };
 
-  const sendAllPdfs = async (items: any[], accessToken: string) => {
-    if (sendingRef.current) return;
+  const sendAllPdfs = async () => {
+    if (sendingRef.current || records.length === 0) return;
     sendingRef.current = true;
     setSendingAll(true);
 
     let success = 0;
-    for (let i = 0; i < items.length; i++) {
-      const record = items[i];
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
       const id = record.record_id;
-      setProgress(`Sending PDF ${i + 1}/${items.length}…`);
+      setProgress(`Generating & sending PDF ${i + 1}/${records.length}…`);
       try {
         const pdfBase64 = await generatePdfBase64(id);
         const companyName = record.fields?.["Company Name"] || "report";
         const fileName = `Service_Report_${companyName}_${Date.now()}.pdf`;
-        const fileToken = await uploadMedia(accessToken, appToken, fileName, pdfBase64);
-        await updateRecord(accessToken, appToken, selectedTableId, id, {
+        const fileToken = await uploadMedia(token, appToken, fileName, pdfBase64);
+        await updateRecord(token, appToken, selectedTableId, id, {
           "Report Summary": [{ file_token: fileToken, name: fileName, type: "application/pdf" }],
         });
         success++;
@@ -154,7 +133,7 @@ export default function Index() {
       }
     }
 
-    toast.success(`Sent ${success}/${items.length} PDFs to Lark`);
+    toast.success(`Sent ${success}/${records.length} PDFs to Lark`);
     setSendingAll(false);
     sendingRef.current = false;
     setProgress("");
@@ -162,73 +141,8 @@ export default function Index() {
 
   const handleUpdate = async () => {
     if (!token || !appToken || !selectedTableId) return toast.error("Select a table first");
-    await fetchAndSend();
+    await fetchRecords();
   };
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Remove data URL prefix to get raw base64
-        resolve(result.split(",")[1]);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const uploadFiles = async (files: File[]): Promise<{ file_token: string; name: string; type: string }[]> => {
-    const results: { file_token: string; name: string; type: string }[] = [];
-    for (const file of files) {
-      const base64 = await fileToBase64(file);
-      const fileToken = await uploadMedia(token, appToken, file.name, base64);
-      results.push({ file_token: fileToken, name: file.name, type: file.type || "image/jpeg" });
-    }
-    return results;
-  };
-
-  const handleCreateRecord = async () => {
-    if (!token || !appToken || !selectedTableId) return;
-    setCreatingRecord(true);
-    try {
-      const fields: Record<string, any> = { ...newRecordFields };
-
-      // Upload before images
-      if (beforeImages.length > 0) {
-        setProgress("Uploading before service images…");
-        fields["Before Service Images"] = await uploadFiles(beforeImages);
-      }
-
-      // Upload after images
-      if (afterImages.length > 0) {
-        setProgress("Uploading after service images…");
-        fields["After Service Images"] = await uploadFiles(afterImages);
-      }
-
-      setProgress("Creating record…");
-      await createRecord(token, appToken, selectedTableId, fields);
-      toast.success("Record created successfully");
-      setNewRecordFields({});
-      setBeforeImages([]);
-      setAfterImages([]);
-      setShowAddRecord(false);
-      setProgress("");
-      // Refresh records
-      await fetchAndSend();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setCreatingRecord(false);
-      setProgress("");
-    }
-  };
-
-  // Editable text field types in Lark: 1=text, 2=number, 3=select, 5=date, 13=phone, 15=url, 22=location
-  const editableFieldTypes = [1, 2, 3, 5, 13, 15, 22];
-  const creatableFields = tableFields.filter(
-    (f) => editableFieldTypes.includes(f.type) && f.field_name !== 'Report Summary'
-  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -246,13 +160,13 @@ export default function Index() {
           <div className="flex items-center gap-2">
             {token && selectedTableId && (
               <>
-                <Button onClick={() => setShowAddRecord(!showAddRecord)} variant="outline" size="sm">
-                  {showAddRecord ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                  {showAddRecord ? 'Cancel' : 'Add Record'}
-                </Button>
                 <Button onClick={handleUpdate} disabled={loading || sendingAll} variant="outline" size="sm">
-                  <RefreshCw className={`h-3.5 w-3.5 ${loading || sendingAll ? 'animate-spin' : ''}`} />
-                  Update
+                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+                <Button onClick={sendAllPdfs} disabled={loading || sendingAll || records.length === 0} size="sm">
+                  {sendingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  Send PDFs to Lark
                 </Button>
               </>
             )}
@@ -344,93 +258,8 @@ export default function Index() {
           </Card>
         )}
 
-        {/* Add Record Form */}
-        {showAddRecord && creatableFields.length > 0 && (
-          <Card className="p-6 border-primary/30">
-            <h3 className="font-semibold mb-4">Add New Record</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {creatableFields.map((field) => (
-                <div key={field.field_id} className="space-y-1.5">
-                  <Label>{field.field_name}</Label>
-                  {field.field_name === 'Case Information' || field.field_name === 'Engineer Report' ? (
-                    <Textarea
-                      value={newRecordFields[field.field_name] || ''}
-                      onChange={(e) =>
-                        setNewRecordFields((prev) => ({ ...prev, [field.field_name]: e.target.value }))
-                      }
-                      placeholder={field.field_name}
-                    />
-                  ) : (
-                    <Input
-                      value={newRecordFields[field.field_name] || ''}
-                      onChange={(e) =>
-                        setNewRecordFields((prev) => ({ ...prev, [field.field_name]: e.target.value }))
-                      }
-                      placeholder={field.field_name}
-                    />
-                  )}
-                </div>
-              ))}
-
-              {/* Before Service Images upload */}
-              <div className="space-y-1.5">
-                <Label>Before Service Images</Label>
-                <div className="border border-border rounded-md p-3 space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    <Upload className="h-4 w-4" />
-                    <span>{beforeImages.length > 0 ? `${beforeImages.length} file(s) selected` : 'Choose images…'}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => setBeforeImages(Array.from(e.target.files || []))}
-                    />
-                  </label>
-                  {beforeImages.length > 0 && (
-                    <div className="flex gap-2 flex-wrap">
-                      {beforeImages.map((f, i) => (
-                        <span key={i} className="text-xs bg-muted px-2 py-1 rounded">{f.name}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* After Service Images upload */}
-              <div className="space-y-1.5">
-                <Label>After Service Images</Label>
-                <div className="border border-border rounded-md p-3 space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    <Upload className="h-4 w-4" />
-                    <span>{afterImages.length > 0 ? `${afterImages.length} file(s) selected` : 'Choose images…'}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => setAfterImages(Array.from(e.target.files || []))}
-                    />
-                  </label>
-                  {afterImages.length > 0 && (
-                    <div className="flex gap-2 flex-wrap">
-                      {afterImages.map((f, i) => (
-                        <span key={i} className="text-xs bg-muted px-2 py-1 rounded">{f.name}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <Button onClick={handleCreateRecord} disabled={creatingRecord} className="mt-4">
-              {creatingRecord ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-              Create Record
-            </Button>
-          </Card>
-        )}
-
         {/* Progress */}
-        {(loading || sendingAll || creatingRecord) && progress && (
+        {(loading || sendingAll) && progress && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             {progress}
