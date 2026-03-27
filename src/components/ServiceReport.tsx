@@ -111,15 +111,7 @@ function extractRichText(val: any): string {
 }
 
 function getFieldValue(fields: Record<string, any>, key: string): string {
-  const val = fields[key];
-  if (val === undefined || val === null) return '';
-  if (typeof val === 'string') return val;
-  if (typeof val === 'number') return String(val);
-  if (Array.isArray(val)) {
-    return val.map((v: any) => (typeof v === 'object' && v.text ? v.text : String(v))).join('');
-  }
-  if (typeof val === 'object' && val.text) return val.text;
-  return JSON.stringify(val);
+  return extractRichText(fields[key]);
 }
 
 function getFileTokens(fields: Record<string, any>, key: string): string[] {
