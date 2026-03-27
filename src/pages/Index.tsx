@@ -224,21 +224,30 @@ export default function Index() {
             <h2 className="font-semibold">Lark Credentials</h2>
             {token && <CheckCircle className="h-4 w-4 text-green-500 ml-auto" />}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="appId">App ID</Label>
-              <Input id="appId" value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="cli_xxxxx" disabled={!!token} />
+          {!token ? (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="tenantToken">Tenant Access Token</Label>
+                <Input
+                  id="tenantToken"
+                  value={appId}
+                  onChange={(e) => setAppId(e.target.value)}
+                  placeholder="t-g1xxxxx..."
+                />
+              </div>
+              <Button
+                onClick={() => {
+                  if (!appId) return toast.error("Enter a Tenant Access Token");
+                  setToken(appId);
+                  toast.success("Token set successfully");
+                }}
+                disabled={!appId}
+              >
+                Continue
+              </Button>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="appSecret">App Secret</Label>
-              <Input id="appSecret" type="password" value={appSecret} onChange={(e) => setAppSecret(e.target.value)} placeholder="••••••••" disabled={!!token} />
-            </div>
-          </div>
-          {!token && (
-            <Button onClick={handleAuth} disabled={loading || !appId || !appSecret} className="mt-4">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Authenticate
-            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">Authenticated ✓</p>
           )}
         </Card>
 
