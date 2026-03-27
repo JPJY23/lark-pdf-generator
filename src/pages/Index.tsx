@@ -114,24 +114,11 @@ export default function Index() {
     sendingRef.current = true;
     setSendingAll(true);
 
-    // Filter: only send if "Report Summary" field is empty/missing
-    const recordsToSend = records.filter((record) => {
-      const reportSummary = record.fields?.["Report Summary"];
-      return !reportSummary || (Array.isArray(reportSummary) && reportSummary.length === 0);
-    });
-
-    if (recordsToSend.length === 0) {
-      toast.info("All records already have a Report Summary — nothing to send.");
-      setSendingAll(false);
-      sendingRef.current = false;
-      return;
-    }
-
     let success = 0;
-    for (let i = 0; i < recordsToSend.length; i++) {
-      const record = recordsToSend[i];
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
       const id = record.record_id;
-      setProgress(`Generating & sending PDF ${i + 1}/${recordsToSend.length}…`);
+      setProgress(`Generating & sending PDF ${i + 1}/${records.length}…`);
       try {
         const pdfBase64 = await generatePdfBase64(id);
         const companyName = record.fields?.["Company Name"] || "report";
@@ -146,7 +133,7 @@ export default function Index() {
       }
     }
 
-    toast.success(`Sent ${success}/${recordsToSend.length} PDFs to Lark`);
+    toast.success(`Sent ${success}/${records.length} PDFs to Lark`);
     setSendingAll(false);
     sendingRef.current = false;
     setProgress("");
