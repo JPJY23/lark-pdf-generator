@@ -129,7 +129,7 @@ export function generateReportSummary(fields: Record<string, any>): string {
   const serviceEnd = formatDateValue(fields['Service End']);
   const serviceStatus = getFieldValue(fields, 'Service Status');
   const completedBy = getFieldValue(fields, 'Service Completed By');
-  const caseInfo = extractRichText(fields['Case Information']);
+  const caseInfo = extractRichText(fields['Case Information']) || extractRichText(fields['Engineer Report']) || extractRichText(fields['Engineer report']) || extractRichText(fields['case information']);
 
   return `Service Report - ${companyName}
 Robot: ${robotType} (S/N: ${robotSerial})
@@ -145,6 +145,10 @@ export default function ServiceReport({ record, recordId, token }: ServiceReport
   const [imageMap, setImageMap] = useState<Record<string, string>>({});
   const [loadingImages, setLoadingImages] = useState(false);
 
+  // Debug: log all field names and their raw values to find the correct engineer report field
+  console.log(`[ServiceReport ${recordId}] All field keys:`, Object.keys(fields));
+  console.log(`[ServiceReport ${recordId}] All fields:`, JSON.stringify(fields, null, 2));
+
   const companyName = getFieldValue(fields, 'Company Name');
   const companyAddress = getFieldValue(fields, 'Company Address');
   const contactName = getFieldValue(fields, 'Contact Name');
@@ -152,11 +156,10 @@ export default function ServiceReport({ record, recordId, token }: ServiceReport
   const robotType = getFieldValue(fields, 'Robot Type');
   const robotSerial = getFieldValue(fields, 'Robot Serial Number');
   const robotIssue = getFieldValue(fields, 'Robot Issue');
-  // Use date formatter for Service Start/End
   const serviceStart = formatDateValue(fields['Service Start']);
   const serviceEnd = formatDateValue(fields['Service End']);
-  // Use rich text extractor for Case Information (Engineer Report)
-  const caseInfo = extractRichText(fields['Case Information']);
+  // Try multiple possible field names for engineer report
+  const caseInfo = extractRichText(fields['Case Information']) || extractRichText(fields['Engineer Report']) || extractRichText(fields['Engineer report']) || extractRichText(fields['case information']);
   const serviceStatus = getFieldValue(fields, 'Service Status');
   const completedBy = getFieldValue(fields, 'Service Completed By');
 
