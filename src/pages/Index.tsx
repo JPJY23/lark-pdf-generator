@@ -16,7 +16,7 @@ import {
   uploadMedia,
 } from "@/lib/lark-api";
 import ServiceReport from "@/components/ServiceReport";
-import { Loader2, CheckCircle, Key, Database, RefreshCw, Plus, X } from "lucide-react";
+import { Loader2, CheckCircle, Key, Database, RefreshCw, Plus, X, Upload } from "lucide-react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 
@@ -45,6 +45,8 @@ export default function Index() {
   const [progress, setProgress] = useState("");
   const [showAddRecord, setShowAddRecord] = useState(false);
   const [newRecordFields, setNewRecordFields] = useState<Record<string, string>>({});
+  const [beforeImages, setBeforeImages] = useState<File[]>([]);
+  const [afterImages, setAfterImages] = useState<File[]>([]);
   const [creatingRecord, setCreatingRecord] = useState(false);
   const sendingRef = useRef(false);
 
@@ -163,20 +165,62 @@ export default function Index() {
     await fetchAndSend();
   };
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove data URL prefix to get raw base64
+        resolve(result.split(",")[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const uploadFiles = async (files: File[]): Promise<{ file_token: string; name: string; type: string }[]> => {
+    const results: { file_token: string; name: string; type: string }[] = [];
+    for (const file of files) {
+      const base64 = await fileToBase64(file);
+      const fileToken = await uploadMedia(token, appToken, file.name, base64);
+      results.push({ file_token: fileToken, name: file.name, type: file.type || "image/jpeg" });
+    }
+    return results;
+  };
+
   const handleCreateRecord = async () => {
     if (!token || !appToken || !selectedTableId) return;
     setCreatingRecord(true);
     try {
-      await createRecord(token, appToken, selectedTableId, newRecordFields);
+      const fields: Record<string, any> = { ...newRecordFields };
+
+      // Upload before images
+      if (beforeImages.length > 0) {
+        setProgress("Uploading before service images…");
+        fields["Before Service Images"] = await uploadFiles(beforeImages);
+      }
+
+      // Upload after images
+      if (afterImages.length > 0) {
+        setProgress("Uploading after service images…");
+        fields["After Service Images"] = await uploadFiles(afterImages);
+      }
+
+      setProgress("Creating record…");
+      await createRecord(token, appToken, selectedTableId, fields);
       toast.success("Record created successfully");
       setNewRecordFields({});
+      setBeforeImages([]);
+      setAfterImages([]);
       setShowAddRecord(false);
+      setProgress("");
       // Refresh records
       await fetchAndSend();
     } catch (e: any) {
       toast.error(e.message);
     } finally {
       setCreatingRecord(false);
+      setProgress("");
     }
   };
 
@@ -227,23 +271,27 @@ export default function Index() {
           {!token ? (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="tenantToken">Tenant Access Token</Label>
+                <Label htmlFor="appId">App ID</Label>
                 <Input
-                  id="tenantToken"
+                  id="appId"
                   value={appId}
                   onChange={(e) => setAppId(e.target.value)}
-                  placeholder="t-g1xxxxx..."
+                  placeholder="cli_xxxxx..."
                 />
               </div>
-              <Button
-                onClick={() => {
-                  if (!appId) return toast.error("Enter a Tenant Access Token");
-                  setToken(appId);
-                  toast.success("Token set successfully");
-                }}
-                disabled={!appId}
-              >
-                Continue
+              <div className="space-y-1.5">
+                <Label htmlFor="appSecret">App Secret</Label>
+                <Input
+                  id="appSecret"
+                  type="password"
+                  value={appSecret}
+                  onChange={(e) => setAppSecret(e.target.value)}
+                  placeholder="Enter app secret"
+                />
+              </div>
+              <Button onClick={handleAuth} disabled={loading || !appId || !appSecret}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Authenticate
               </Button>
             </div>
           ) : (
@@ -323,6 +371,56 @@ export default function Index() {
                   )}
                 </div>
               ))}
+
+              {/* Before Service Images upload */}
+              <div className="space-y-1.5">
+                <Label>Before Service Images</Label>
+                <div className="border border-border rounded-md p-3 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    <Upload className="h-4 w-4" />
+                    <span>{beforeImages.length > 0 ? `${beforeImages.length} file(s) selected` : 'Choose images…'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => setBeforeImages(Array.from(e.target.files || []))}
+                    />
+                  </label>
+                  {beforeImages.length > 0 && (
+                    <div className="flex gap-2 flex-wrap">
+                      {beforeImages.map((f, i) => (
+                        <span key={i} className="text-xs bg-muted px-2 py-1 rounded">{f.name}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* After Service Images upload */}
+              <div className="space-y-1.5">
+                <Label>After Service Images</Label>
+                <div className="border border-border rounded-md p-3 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    <Upload className="h-4 w-4" />
+                    <span>{afterImages.length > 0 ? `${afterImages.length} file(s) selected` : 'Choose images…'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => setAfterImages(Array.from(e.target.files || []))}
+                    />
+                  </label>
+                  {afterImages.length > 0 && (
+                    <div className="flex gap-2 flex-wrap">
+                      {afterImages.map((f, i) => (
+                        <span key={i} className="text-xs bg-muted px-2 py-1 rounded">{f.name}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
             <Button onClick={handleCreateRecord} disabled={creatingRecord} className="mt-4">
               {creatingRecord ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
@@ -332,7 +430,7 @@ export default function Index() {
         )}
 
         {/* Progress */}
-        {(loading || sendingAll) && progress && (
+        {(loading || sendingAll || creatingRecord) && progress && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             {progress}
