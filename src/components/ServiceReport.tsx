@@ -61,32 +61,50 @@ function extractRichText(val: any): string {
   if (val === undefined || val === null) return '';
   if (typeof val === 'string') return val;
   if (typeof val === 'number') return String(val);
+  if (typeof val === 'boolean') return String(val);
 
   if (Array.isArray(val)) {
-    return val.map((v: any) => {
+    const parts = val.map((v: any) => {
       if (typeof v === 'string') return v;
+      if (typeof v === 'number') return String(v);
       if (typeof v === 'object' && v !== null) {
-        // Handle {type: "text", text: "content"} segments
-        if (v.text !== undefined) return String(v.text);
-        // Handle {type: "paragraph", children: [...]} structures
+        // Lark text segments: {type: "text", text: "content"}
+        if (typeof v.text === 'string') return v.text;
+        // Lark link segments: {type: "url", link: "...", text: "..."}
+        if (v.link && typeof v.link === 'string') return v.text || v.link;
+        // Paragraph with children
         if (v.children && Array.isArray(v.children)) {
-          return v.children.map((c: any) => (c.text !== undefined ? String(c.text) : '')).join('');
+          return v.children.map((c: any) => {
+            if (typeof c === 'string') return c;
+            if (typeof c.text === 'string') return c.text;
+            return '';
+          }).join('');
         }
-        // Handle {content: "..."} or {value: "..."}
-        if (v.content !== undefined) return String(v.content);
+        // Nested content/value
+        if (v.content !== undefined) return extractRichText(v.content);
         if (v.value !== undefined) return extractRichText(v.value);
+        // Fallback: try to get any string property
+        for (const key of ['text', 'name', 'label', 'title', 'display_value']) {
+          if (typeof v[key] === 'string') return v[key];
+        }
       }
-      return String(v);
-    }).join('\n');
+      return '';
+    }).filter(Boolean);
+    return parts.join('');
   }
 
   if (typeof val === 'object') {
-    // Handle {text: "..."}, {content: "..."}, {value: [...]}
-    if (val.text !== undefined) return String(val.text);
-    if (val.content !== undefined) return extractRichText(val.content);
+    // Direct text property
+    if (typeof val.text === 'string') return val.text;
+    // Lark sometimes wraps in {value: [...]}
     if (val.value !== undefined) return extractRichText(val.value);
-    // Handle {body: {content: [...]}} for document-style rich text
+    if (val.content !== undefined) return extractRichText(val.content);
+    // Document-style: {body: {content: [...]}}
     if (val.body?.content) return extractRichText(val.body.content);
+    // Try common string properties
+    for (const key of ['text', 'name', 'label', 'title', 'display_value']) {
+      if (typeof val[key] === 'string') return val[key];
+    }
   }
 
   return JSON.stringify(val);
