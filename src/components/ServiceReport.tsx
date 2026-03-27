@@ -199,8 +199,8 @@ export default function ServiceReport({ record, recordId, token }: ServiceReport
     <div id={`report-${recordId}`} className="bg-white text-black p-8 max-w-[210mm] mx-auto"
       style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}>
       {/* Header */}
-      <div className="flex items-start justify-between mb-2">
-        <h1 className="text-3xl font-bold text-black">Service Report</h1>
+      <div className="flex items-start justify-between mb-4">
+        <h1 className="text-3xl font-bold text-black pb-2">Service Report</h1>
         <img src={autovexLogo} alt="Autovex" className="h-8 object-contain" crossOrigin="anonymous" />
       </div>
       <hr className="border-t border-gray-300 mb-6" />
