@@ -89,7 +89,20 @@ export default function Index() {
   const generatePdfBase64 = async (recordId: string): Promise<string> => {
     const el = document.getElementById(`report-${recordId}`);
     if (!el) throw new Error("Report element not found");
-    const canvas = await html2canvas(el, { useCORS: true, scale: 2, backgroundColor: '#ffffff' });
+    // Wait for all images inside the report element to finish loading
+    const imgs = el.querySelectorAll('img');
+    await Promise.all(
+      Array.from(imgs).map(
+        (img) =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>((resolve) => {
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+              }),
+      ),
+    );
+    const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 2, backgroundColor: '#ffffff' });
     const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageWidth = pdf.internal.pageSize.getWidth();
