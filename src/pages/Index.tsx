@@ -14,7 +14,7 @@ import {
   uploadMedia,
 } from "@/lib/lark-api";
 import ServiceReport from "@/components/ServiceReport";
-import { Loader2, CheckCircle, Key, Database, RefreshCw, Send, Search } from "lucide-react";
+import { Loader2, CheckCircle, Key, Database, RefreshCw, Send, Filter } from "lucide-react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 
@@ -35,7 +35,9 @@ export default function Index() {
   const [sendingAll, setSendingAll] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [progress, setProgress] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [filterCompany, setFilterCompany] = useState("all");
+  const [filterRobotType, setFilterRobotType] = useState("all");
+  const [filterServiceBy, setFilterServiceBy] = useState("all");
   const sendingRef = useRef(false);
 
   // When token and appToken are set, fetch tables
@@ -163,16 +165,30 @@ export default function Index() {
     setProgress("");
   };
 
-  const filteredRecords = records.filter((r) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    const fields = r.fields || {};
-    return Object.values(fields).some((v: any) => {
-      if (typeof v === "string") return v.toLowerCase().includes(q);
-      if (typeof v === "number") return String(v).includes(q);
-      if (Array.isArray(v)) return v.some((item: any) => item?.text?.toLowerCase?.()?.includes(q));
-      return false;
+  const extractFieldText = (val: any): string => {
+    if (!val) return "";
+    if (typeof val === "string") return val;
+    if (typeof val === "number") return String(val);
+    if (Array.isArray(val)) return val.map((v: any) => v?.text || v?.val || "").join(", ");
+    if (val?.text) return val.text;
+    return String(val);
+  };
+
+  const uniqueValues = (fieldKey: string): string[] => {
+    const set = new Set<string>();
+    records.forEach((r) => {
+      const v = extractFieldText(r.fields?.[fieldKey]).trim();
+      if (v) set.add(v);
     });
+    return Array.from(set).sort();
+  };
+
+  const filteredRecords = records.filter((r) => {
+    const fields = r.fields || {};
+    if (filterCompany !== "all" && extractFieldText(fields["Company Name"]) !== filterCompany) return false;
+    if (filterRobotType !== "all" && extractFieldText(fields["Robot Type"]) !== filterRobotType) return false;
+    if (filterServiceBy !== "all" && extractFieldText(fields["Service Completed By"]) !== filterServiceBy) return false;
+    return true;
   });
 
   const handleUpdate = async () => {
@@ -305,21 +321,50 @@ export default function Index() {
         {/* Records */}
         {records.length > 0 && (
           <div className="space-y-6 animate-fade-in">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4">
               <div className="flex items-center gap-2">
-                <Database className="h-4 w-4 text-primary" />
+                <Filter className="h-4 w-4 text-primary" />
                 <h2 className="font-semibold text-lg">
                   {filteredRecords.length} of {records.length} Service Report{records.length > 1 ? 's' : ''}
                 </h2>
               </div>
-              <div className="relative w-64">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search records…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Company Name</Label>
+                  <Select value={filterCompany} onValueChange={setFilterCompany}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      {uniqueValues("Company Name").map((v) => (
+                        <SelectItem key={v} value={v}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Robot Type</Label>
+                  <Select value={filterRobotType} onValueChange={setFilterRobotType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      {uniqueValues("Robot Type").map((v) => (
+                        <SelectItem key={v} value={v}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Service Completed By</Label>
+                  <Select value={filterServiceBy} onValueChange={setFilterServiceBy}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      {uniqueValues("Service Completed By").map((v) => (
+                        <SelectItem key={v} value={v}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
             {filteredRecords.map((record, i) => (
