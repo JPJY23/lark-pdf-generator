@@ -205,7 +205,7 @@ export default function Index() {
               <span className="text-primary-foreground font-bold text-sm">AV</span>
             </div>
             <div>
-              <h1 className="text-lg font-bold">Autovex Service Reports</h1>
+              <h1 className="text-lg font-bold">Service Reports</h1>
               <p className="text-xs text-muted-foreground">Lark Bitable Integration</p>
             </div>
           </div>
