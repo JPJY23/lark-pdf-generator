@@ -14,7 +14,7 @@ import {
   uploadMedia,
 } from "@/lib/lark-api";
 import ServiceReport from "@/components/ServiceReport";
-import { Loader2, CheckCircle, Key, Database, RefreshCw, Send } from "lucide-react";
+import { Loader2, CheckCircle, Key, Database, RefreshCw, Send, Search } from "lucide-react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 
@@ -33,7 +33,9 @@ export default function Index() {
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [sendingAll, setSendingAll] = useState(false);
+  const [sendingId, setSendingId] = useState<string | null>(null);
   const [progress, setProgress] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const sendingRef = useRef(false);
 
   // When token and appToken are set, fetch tables
@@ -109,16 +111,38 @@ export default function Index() {
     return pdf.output("datauristring").split(",")[1];
   };
 
+  const sendSinglePdf = async (record: any) => {
+    const id = record.record_id;
+    if (sendingId) return;
+    setSendingId(id);
+    setProgress("Generating & sending PDF…");
+    try {
+      const pdfBase64 = await generatePdfBase64(id);
+      const companyName = record.fields?.["Company Name"] || "report";
+      const fileName = `Service_Report_${companyName}_${Date.now()}.pdf`;
+      const fileToken = await uploadMedia(token, appToken, fileName, pdfBase64);
+      await updateRecord(token, appToken, selectedTableId, id, {
+        "Report Summary": [{ file_token: fileToken, name: fileName, type: "application/pdf" }],
+      });
+      toast.success(`PDF sent for ${companyName}`);
+    } catch (e: any) {
+      toast.error(`Failed: ${e.message}`);
+    } finally {
+      setSendingId(null);
+      setProgress("");
+    }
+  };
+
   const sendAllPdfs = async () => {
-    if (sendingRef.current || records.length === 0) return;
+    if (sendingRef.current || filteredRecords.length === 0) return;
     sendingRef.current = true;
     setSendingAll(true);
 
     let success = 0;
-    for (let i = 0; i < records.length; i++) {
-      const record = records[i];
+    for (let i = 0; i < filteredRecords.length; i++) {
+      const record = filteredRecords[i];
       const id = record.record_id;
-      setProgress(`Generating & sending PDF ${i + 1}/${records.length}…`);
+      setProgress(`Generating & sending PDF ${i + 1}/${filteredRecords.length}…`);
       try {
         const pdfBase64 = await generatePdfBase64(id);
         const companyName = record.fields?.["Company Name"] || "report";
@@ -133,11 +157,23 @@ export default function Index() {
       }
     }
 
-    toast.success(`Sent ${success}/${records.length} PDFs to Lark`);
+    toast.success(`Sent ${success}/${filteredRecords.length} PDFs to Lark`);
     setSendingAll(false);
     sendingRef.current = false;
     setProgress("");
   };
+
+  const filteredRecords = records.filter((r) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const fields = r.fields || {};
+    return Object.values(fields).some((v: any) => {
+      if (typeof v === "string") return v.toLowerCase().includes(q);
+      if (typeof v === "number") return String(v).includes(q);
+      if (Array.isArray(v)) return v.some((item: any) => item?.text?.toLowerCase?.()?.includes(q));
+      return false;
+    });
+  });
 
   const handleUpdate = async () => {
     if (!token || !appToken || !selectedTableId) return toast.error("Select a table first");
@@ -164,9 +200,9 @@ export default function Index() {
                   <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                   Refresh
                 </Button>
-                <Button onClick={sendAllPdfs} disabled={loading || sendingAll || records.length === 0} size="sm">
+                <Button onClick={sendAllPdfs} disabled={loading || sendingAll || filteredRecords.length === 0} size="sm">
                   {sendingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                  Send PDFs to Lark
+                  Send All ({filteredRecords.length})
                 </Button>
               </>
             )}
@@ -269,12 +305,40 @@ export default function Index() {
         {/* Records */}
         {records.length > 0 && (
           <div className="space-y-6 animate-fade-in">
-            <div className="flex items-center gap-2">
-              <Database className="h-4 w-4 text-primary" />
-              <h2 className="font-semibold text-lg">{records.length} Service Report{records.length > 1 ? 's' : ''}</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Database className="h-4 w-4 text-primary" />
+                <h2 className="font-semibold text-lg">
+                  {filteredRecords.length} of {records.length} Service Report{records.length > 1 ? 's' : ''}
+                </h2>
+              </div>
+              <div className="relative w-64">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search records…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
             </div>
-            {records.map((record, i) => (
+            {filteredRecords.map((record, i) => (
               <div key={record.record_id || i} className="shadow-md rounded-lg overflow-hidden border border-border">
+                <div className="flex items-center justify-end gap-2 px-4 py-2 bg-muted/50 border-b border-border">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!!sendingId || sendingAll}
+                    onClick={() => sendSinglePdf(record)}
+                  >
+                    {sendingId === record.record_id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Send className="h-3.5 w-3.5" />
+                    )}
+                    Send PDF
+                  </Button>
+                </div>
                 <ServiceReport record={record} recordId={record.record_id} token={token} />
               </div>
             ))}
