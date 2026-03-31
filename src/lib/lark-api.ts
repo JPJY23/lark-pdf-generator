@@ -85,26 +85,49 @@ export async function updateRecord(token: string, appToken: string, tableId: str
 }
 
 export async function downloadMedia(token: string, fileToken: string): Promise<string> {
-  const data = await callLarkProxy({
-    action: 'download_media',
-    tenant_access_token: token,
-    file_token: fileToken,
+  const { data: sessionData } = await supabase.auth.getSession();
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lark-proxy`;
+  
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      ...(sessionData?.session?.access_token
+        ? { 'Authorization': `Bearer ${sessionData.session.access_token}` }
+        : {}),
+    },
+    body: JSON.stringify({
+      action: 'stream_media',
+      tenant_access_token: token,
+      file_token: fileToken,
+    }),
   });
-  if (data.error) throw new Error(data.error);
-  return `data:${data.content_type};base64,${data.base64}`;
+
+  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
 }
 
 export async function batchDownloadMedia(token: string, fileTokens: string[]): Promise<Record<string, string>> {
   if (fileTokens.length === 0) return {};
-  const data = await callLarkProxy({
-    action: 'batch_download_media',
-    tenant_access_token: token,
-    file_tokens: fileTokens,
-  });
   const result: Record<string, string> = {};
-  for (const [ft, info] of Object.entries(data.results || {})) {
-    const { base64, content_type } = info as { base64: string; content_type: string };
-    result[ft] = `data:${content_type};base64,${base64}`;
+  
+  // Download individually in parallel (max 3 concurrent to avoid overload)
+  const concurrency = 3;
+  for (let i = 0; i < fileTokens.length; i += concurrency) {
+    const batch = fileTokens.slice(i, i + concurrency);
+    const results = await Promise.allSettled(
+      batch.map(async (ft) => {
+        const url = await downloadMedia(token, ft);
+        return { ft, url };
+      })
+    );
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        result[r.value.ft] = r.value.url;
+      }
+    }
   }
   return result;
 }
