@@ -93,7 +93,7 @@ serve(async (req) => {
       return new Response(JSON.stringify(data), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    if (action === 'download_media') {
+    if (action === 'download_media' || action === 'stream_media') {
       const res = await fetch(`https://open.larksuite.com/open-apis/drive/v1/medias/${file_token}/download`, {
         headers: { 'Authorization': `Bearer ${tenant_access_token}` },
       });
@@ -106,47 +106,19 @@ serve(async (req) => {
         });
       }
 
-      const contentType = res.headers.get('content-type') || 'image/png';
-      const buffer = await res.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64 = btoa(binary);
-
-      return new Response(JSON.stringify({ base64, content_type: contentType }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      // Stream the response body directly — no buffering into memory
+      return new Response(res.body, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': res.headers.get('content-type') || 'application/octet-stream',
+          'Content-Length': res.headers.get('content-length') || '',
+          'Cache-Control': 'public, max-age=3600',
+        },
       });
     }
 
-    if (action === 'batch_download_media') {
-      const results: Record<string, { base64: string; content_type: string }> = {};
-      
-      for (const ft of (file_tokens || [])) {
-        try {
-          const res = await fetch(`https://open.larksuite.com/open-apis/drive/v1/medias/${ft}/download`, {
-            headers: { 'Authorization': `Bearer ${tenant_access_token}` },
-          });
-          if (res.ok) {
-            const contentType = res.headers.get('content-type') || 'image/png';
-            const buffer = await res.arrayBuffer();
-            const bytes = new Uint8Array(buffer);
-            let binary = '';
-            for (let i = 0; i < bytes.length; i++) {
-              binary += String.fromCharCode(bytes[i]);
-            }
-            results[ft] = { base64: btoa(binary), content_type: contentType };
-          }
-        } catch (_) {
-          // skip failed downloads
-        }
-      }
-
-      return new Response(JSON.stringify({ results }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    // batch_download_media is removed — client downloads individually now
 
     if (action === 'upload_media') {
       const binaryStr = atob(fields?.file_base64);
