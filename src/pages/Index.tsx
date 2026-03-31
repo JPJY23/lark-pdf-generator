@@ -120,25 +120,37 @@ export default function Index() {
     }
     await new Promise((r) => setTimeout(r, 100));
 
-    const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 2, backgroundColor: '#ffffff' });
-    const imgData = canvas.toDataURL("image/png");
+    const fullCanvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 2, backgroundColor: '#ffffff' });
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pageWidth - 20;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const margin = 10;
+    const usableWidth = pageWidth - margin * 2;
+    const usableHeight = pageHeight - margin * 2;
 
-    let heightLeft = imgHeight;
-    let position = 10;
+    // Calculate how many canvas pixels fit per page
+    const scale = fullCanvas.width / usableWidth; // px per mm
+    const pageCanvasHeight = Math.floor(usableHeight * scale);
+    const totalPages = Math.ceil(fullCanvas.height / pageCanvasHeight);
 
-    pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight - 20;
+    for (let page = 0; page < totalPages; page++) {
+      if (page > 0) pdf.addPage();
+      const srcY = page * pageCanvasHeight;
+      const srcH = Math.min(pageCanvasHeight, fullCanvas.height - srcY);
 
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight + 10;
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight - 20;
+      // Slice the canvas for this page
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = fullCanvas.width;
+      pageCanvas.height = srcH;
+      const ctx = pageCanvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        ctx.drawImage(fullCanvas, 0, srcY, fullCanvas.width, srcH, 0, 0, fullCanvas.width, srcH);
+      }
+      const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.95);
+      const sliceHeight = srcH / scale;
+      pdf.addImage(pageImgData, 'JPEG', margin, margin, usableWidth, sliceHeight);
     }
 
     return pdf.output("datauristring").split(",")[1];
