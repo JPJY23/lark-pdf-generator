@@ -201,7 +201,7 @@ export default function ServiceReport({ record, recordId, token }: ServiceReport
           const src = imageMap[ft] || '';
           return (
             <img key={ft} src={src} alt={`${label} ${i + 1}`}
-              className="w-40 h-32 object-contain rounded border bg-gray-50" crossOrigin="anonymous" />
+              className="max-h-48 max-w-full w-auto h-auto object-contain rounded border bg-white" crossOrigin="anonymous" />
           );
         })}
       </div>
