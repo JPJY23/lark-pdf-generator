@@ -117,7 +117,17 @@ function getFieldValue(fields: Record<string, any>, key: string): string {
 function getFileTokens(fields: Record<string, any>, key: string): string[] {
   const val = fields[key];
   if (!val || !Array.isArray(val)) return [];
-  return val.map((v: any) => v.file_token || v.token || '').filter(Boolean);
+  // Only include image files, skip videos and other non-image types
+  return val
+    .filter((v: any) => {
+      const type = (v.type || '').toLowerCase();
+      const name = (v.name || '').toLowerCase();
+      if (type && !type.startsWith('image/')) return false;
+      if (name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.avi') || name.endsWith('.webm')) return false;
+      return true;
+    })
+    .map((v: any) => v.file_token || v.token || '')
+    .filter(Boolean);
 }
 
 export function generateReportSummary(fields: Record<string, any>): string {
