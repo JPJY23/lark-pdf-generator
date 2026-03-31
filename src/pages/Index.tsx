@@ -90,70 +90,72 @@ export default function Index() {
     const el = document.getElementById(`report-${recordId}`);
     if (!el) throw new Error("Report element not found");
 
-    // Wait for all images to load
-    const imgs = el.querySelectorAll('img');
-    await Promise.all(
-      Array.from(imgs).map((img) =>
-        img.complete
-          ? Promise.resolve()
-          : new Promise<void>((resolve) => {
-              img.onload = () => resolve();
-              img.onerror = () => resolve();
-            }),
-      ),
-    );
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.style.position = "fixed";
+    clone.style.left = "-10000px";
+    clone.style.top = "0";
+    clone.style.zIndex = "-1";
+    clone.style.background = "#ffffff";
+    clone.style.width = `${el.scrollWidth}px`;
+    document.body.appendChild(clone);
 
-    // Convert all images to JPEG data URIs for html2canvas compatibility
-    for (const img of Array.from(imgs)) {
-      try {
-        if (!img.naturalWidth || !img.naturalHeight) continue;
-        const cvs = document.createElement('canvas');
-        cvs.width = img.naturalWidth;
-        cvs.height = img.naturalHeight;
-        const ctx = cvs.getContext('2d');
-        if (!ctx) continue;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, cvs.width, cvs.height);
-        ctx.drawImage(img, 0, 0);
-        img.src = cvs.toDataURL('image/jpeg', 0.92);
-      } catch { /* skip */ }
-    }
-    await new Promise((r) => setTimeout(r, 100));
+    try {
+      const imgs = clone.querySelectorAll("img");
+      await Promise.all(
+        Array.from(imgs).map((img) =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>((resolve) => {
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+              }),
+        ),
+      );
 
-    const fullCanvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 2, backgroundColor: '#ffffff' });
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 10;
-    const usableWidth = pageWidth - margin * 2;
-    const usableHeight = pageHeight - margin * 2;
-
-    // Calculate how many canvas pixels fit per page
-    const scale = fullCanvas.width / usableWidth; // px per mm
-    const pageCanvasHeight = Math.floor(usableHeight * scale);
-    const totalPages = Math.ceil(fullCanvas.height / pageCanvasHeight);
-
-    for (let page = 0; page < totalPages; page++) {
-      if (page > 0) pdf.addPage();
-      const srcY = page * pageCanvasHeight;
-      const srcH = Math.min(pageCanvasHeight, fullCanvas.height - srcY);
-
-      // Slice the canvas for this page
-      const pageCanvas = document.createElement('canvas');
-      pageCanvas.width = fullCanvas.width;
-      pageCanvas.height = srcH;
-      const ctx = pageCanvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-        ctx.drawImage(fullCanvas, 0, srcY, fullCanvas.width, srcH, 0, 0, fullCanvas.width, srcH);
+      for (const img of Array.from(imgs)) {
+        try {
+          if (!img.naturalWidth || !img.naturalHeight) continue;
+          const cvs = document.createElement("canvas");
+          cvs.width = img.naturalWidth;
+          cvs.height = img.naturalHeight;
+          const ctx = cvs.getContext("2d");
+          if (!ctx) continue;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, cvs.width, cvs.height);
+          ctx.drawImage(img, 0, 0);
+          img.src = cvs.toDataURL("image/jpeg", 0.92);
+        } catch {
+          // skip image conversion failures
+        }
       }
-      const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.95);
-      const sliceHeight = srcH / scale;
-      pdf.addImage(pageImgData, 'JPEG', margin, margin, usableWidth, sliceHeight);
-    }
 
-    return pdf.output("datauristring").split(",")[1];
+      clone.querySelectorAll("[data-pdf-keep]").forEach((node) => {
+        const element = node as HTMLElement;
+        element.style.breakInside = "avoid";
+        element.style.pageBreakInside = "avoid";
+      });
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      await new Promise<void>((resolve) => {
+        pdf.html(clone, {
+          margin: [10, 10, 10, 10],
+          autoPaging: "text",
+          width: 190,
+          windowWidth: clone.scrollWidth,
+          html2canvas: {
+            scale: 1,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: "#ffffff",
+          },
+          callback: () => resolve(),
+        });
+      });
+
+      return pdf.output("datauristring").split(",")[1];
+    } finally {
+      document.body.removeChild(clone);
+    }
   };
 
   const sendSinglePdf = async (record: any) => {
