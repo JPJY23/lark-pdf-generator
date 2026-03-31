@@ -89,19 +89,37 @@ export default function Index() {
   const generatePdfBase64 = async (recordId: string): Promise<string> => {
     const el = document.getElementById(`report-${recordId}`);
     if (!el) throw new Error("Report element not found");
-    // Wait for all images inside the report element to finish loading
+
+    // Wait for all images to load
     const imgs = el.querySelectorAll('img');
     await Promise.all(
-      Array.from(imgs).map(
-        (img) =>
-          img.complete
-            ? Promise.resolve()
-            : new Promise<void>((resolve) => {
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-              }),
+      Array.from(imgs).map((img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+            }),
       ),
     );
+
+    // Convert all images to JPEG data URIs for html2canvas compatibility
+    for (const img of Array.from(imgs)) {
+      try {
+        if (!img.naturalWidth || !img.naturalHeight) continue;
+        const cvs = document.createElement('canvas');
+        cvs.width = img.naturalWidth;
+        cvs.height = img.naturalHeight;
+        const ctx = cvs.getContext('2d');
+        if (!ctx) continue;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, cvs.width, cvs.height);
+        ctx.drawImage(img, 0, 0);
+        img.src = cvs.toDataURL('image/jpeg', 0.92);
+      } catch { /* skip */ }
+    }
+    await new Promise((r) => setTimeout(r, 100));
+
     const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: 2, backgroundColor: '#ffffff' });
     const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
