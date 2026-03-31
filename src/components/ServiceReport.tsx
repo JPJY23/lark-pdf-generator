@@ -186,11 +186,14 @@ export default function ServiceReport({ record, recordId, token }: ServiceReport
       </span>
     );
     return (
-      <div className="flex gap-2 flex-wrap">
-        {tokens.map((ft, i) => (
-          <img key={ft} src={imageMap[ft] || ''} alt={`${label} ${i + 1}`}
-            className="h-20 w-20 object-cover rounded border" crossOrigin="anonymous" />
-        ))}
+      <div className="flex gap-3 flex-wrap">
+        {tokens.map((ft, i) => {
+          const src = imageMap[ft] || '';
+          return (
+            <img key={ft} src={src} alt={`${label} ${i + 1}`}
+              className="w-40 h-32 object-contain rounded border bg-gray-50" crossOrigin="anonymous" />
+          );
+        })}
       </div>
     );
   };
