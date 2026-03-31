@@ -150,11 +150,6 @@ Completed By: ${completedBy}
 Summary: ${caseInfo}`;
 }
 
-const keepTogetherStyle = {
-  breakInside: 'avoid' as const,
-  pageBreakInside: 'avoid' as const,
-};
-
 export default function ServiceReport({ record, recordId, token }: ServiceReportProps) {
   const fields = record.fields || record;
   const [imageMap, setImageMap] = useState<Record<string, string>>({});
@@ -201,14 +196,12 @@ export default function ServiceReport({ record, recordId, token }: ServiceReport
       </span>
     );
     return (
-      <div className="flex gap-3 flex-wrap items-start" style={keepTogetherStyle} data-pdf-keep>
+      <div className="flex gap-3 flex-wrap">
         {tokens.map((ft, i) => {
           const src = imageMap[ft] || '';
           return (
-            <div key={ft} style={keepTogetherStyle} data-pdf-keep>
-              <img src={src} alt={`${label} ${i + 1}`}
-                className="max-h-48 max-w-full w-auto h-auto object-contain rounded border bg-white" crossOrigin="anonymous" />
-            </div>
+            <img key={ft} src={src} alt={`${label} ${i + 1}`}
+              className="max-h-48 max-w-full w-auto h-auto object-contain rounded border bg-white" crossOrigin="anonymous" />
           );
         })}
       </div>
@@ -219,7 +212,7 @@ export default function ServiceReport({ record, recordId, token }: ServiceReport
     <div id={`report-${recordId}`} className="bg-white text-black p-8 max-w-[210mm] mx-auto"
       style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px' }}>
       {/* Header */}
-      <div className="flex items-start justify-between mb-4" style={keepTogetherStyle} data-pdf-keep>
+      <div className="flex items-start justify-between mb-4">
         <h1 className="text-3xl font-bold text-black pb-2">Service Report</h1>
         <img src={autovexLogo} alt="Autovex" className="h-8 object-contain" crossOrigin="anonymous" />
       </div>
@@ -259,7 +252,7 @@ export default function ServiceReport({ record, recordId, token }: ServiceReport
         <TableRow label="Service Completed By" value={completedBy || 'N/A'} />
       </div>
 
-      <p className="text-xs text-gray-500 italic mt-6" style={keepTogetherStyle} data-pdf-keep>
+      <p className="text-xs text-gray-500 italic mt-6">
         This is a computer generated maintenance report, no signature is required.
       </p>
     </div>
@@ -268,7 +261,7 @@ export default function ServiceReport({ record, recordId, token }: ServiceReport
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200" style={keepTogetherStyle} data-pdf-keep>
+    <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200">
       <span className="font-bold text-sm text-black">{children}</span>
     </div>
   );
@@ -276,7 +269,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 function TableRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[220px_1fr] border-b border-gray-100 last:border-b-0" style={keepTogetherStyle} data-pdf-keep>
+    <div className="grid grid-cols-[220px_1fr] border-b border-gray-100 last:border-b-0">
       <div className="px-4 py-2.5 text-sm text-gray-600">{label}</div>
       <div className="px-4 py-2.5 text-sm font-medium text-black">{value || 'N/A'}</div>
     </div>
@@ -286,7 +279,7 @@ function TableRow({ label, value }: { label: string; value: string }) {
 /** Multiline table row that preserves line breaks from rich text */
 function TableRowMultiline({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[220px_1fr] border-b border-gray-100 last:border-b-0" style={keepTogetherStyle} data-pdf-keep>
+    <div className="grid grid-cols-[220px_1fr] border-b border-gray-100 last:border-b-0">
       <div className="px-4 py-2.5 text-sm text-gray-600">{label}</div>
       <div className="px-4 py-2.5 text-sm font-medium text-black whitespace-pre-wrap">
         {value || 'N/A'}
@@ -297,7 +290,7 @@ function TableRowMultiline({ label, value }: { label: string; value: string }) {
 
 function TableRowCustom({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[220px_1fr] border-b border-gray-100 last:border-b-0" style={keepTogetherStyle} data-pdf-keep>
+    <div className="grid grid-cols-[220px_1fr] border-b border-gray-100 last:border-b-0">
       <div className="px-4 py-2.5 text-sm text-gray-600">{label}</div>
       <div className="px-4 py-2.5">{children}</div>
     </div>
